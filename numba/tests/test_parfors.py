@@ -19,6 +19,7 @@ import numpy as np
 from numpy.random import randn
 import operator
 from collections import defaultdict, namedtuple
+from typing import NamedTuple
 import copy
 from itertools import cycle, chain
 import subprocess as subp
@@ -1905,6 +1906,56 @@ class TestParfors(TestParforsBase):
 
         x = TestNamedTuple3(y=np.zeros(10))
         self.check(test_impl, x, check_arg_equality=[comparer])
+
+    def test_namedtuple_parallel_array_assignment_typing(self):
+        # issue10338: array assignment in NamedTuple with typing.NamedTuple
+        A = NamedTuple("A", [("age", np.ndarray)])
+
+        def test_impl(x, y):
+            for i in prange(x.age.shape[0]):
+                y.age[i] = x.age[i]
+            return y
+
+        def comparer(a, b):
+            np.testing.assert_array_equal(a.age, b.age)
+
+        a = A(age=np.array([1, 2, 3]))
+        b = A(age=np.array([0, 0, 0]))
+        self.check(test_impl, a, b, check_arg_equality=[null_comparer, comparer])
+
+    def test_namedtuple_parallel_array_assignment_collections(self):
+        # issue10338: array assignment in NamedTuple with collections.namedtuple
+        A = namedtuple("A", ["age"])
+
+        def test_impl(x, y):
+            for i in prange(x.age.shape[0]):
+                y.age[i] = x.age[i]
+            return y
+
+        def comparer(a, b):
+            np.testing.assert_array_equal(a.age, b.age)
+
+        a = A(age=np.array([1, 2, 3]))
+        b = A(age=np.array([0, 0, 0]))
+        self.check(test_impl, a, b, check_arg_equality=[null_comparer, comparer])
+
+    def test_namedtuple_parallel_multi_field(self):
+        # issue10338: NamedTuple with multiple array fields in parallel
+        MultiField = namedtuple("MultiField", ["x", "y"])
+
+        def test_impl(src, dst):
+            for i in prange(src.x.shape[0]):
+                dst.x[i] = src.x[i] * 2
+                dst.y[i] = src.y[i] + 1
+            return dst
+
+        def comparer(a, b):
+            np.testing.assert_array_equal(a.x, b.x)
+            np.testing.assert_array_equal(a.y, b.y)
+
+        src = MultiField(x=np.array([1, 2, 3]), y=np.array([10, 20, 30]))
+        dst = MultiField(x=np.zeros(3, dtype=np.int64), y=np.zeros(3, dtype=np.int64))
+        self.check(test_impl, src, dst, check_arg_equality=[null_comparer, comparer])
 
     def test_inplace_binop(self):
         def test_impl(a, b):
