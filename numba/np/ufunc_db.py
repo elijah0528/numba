@@ -1113,6 +1113,21 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': numbers.int_shr_impl,
     }
 
+    # np.bitwise_count was added in NumPy 2.0
+    if numpy_version >= (2, 0):
+        ufunc_db[np.bitwise_count] = {
+            'b->B': numbers.int_popcount_impl,
+            'B->B': numbers.int_popcount_impl,
+            'h->B': numbers.int_popcount_impl,
+            'H->B': numbers.int_popcount_impl,
+            'i->B': numbers.int_popcount_impl,
+            'I->B': numbers.int_popcount_impl,
+            'l->B': numbers.int_popcount_impl,
+            'L->B': numbers.int_popcount_impl,
+            'q->B': numbers.int_popcount_impl,
+            'Q->B': numbers.int_popcount_impl,
+        }
+
     # Inject datetime64 support
     from numba.np import npdatetime
     ufunc_db[np.negative].update({
