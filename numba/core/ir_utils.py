@@ -870,6 +870,21 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
                 if isinstance(expr, ir.Expr) and expr.op == 'call':
+                    # Handle namedtuple constructor calls - the result aliases
+                    # all mutable arguments (issue #10338)
+                    callee = expr.func
+                    callee_def = guard(get_definition, func_ir, callee)
+                    if (isinstance(callee_def, (ir.Global, ir.FreeVar)) and
+                        is_namedtuple_class(callee_def.value)):
+                        # Add aliases for positional arguments
+                        for arg in expr.args:
+                            if not is_immutable_type(arg.name, typemap):
+                                _add_alias(lhs, arg.name, alias_map, arg_aliases)
+                        # Add aliases for keyword arguments
+                        for _, arg in expr.kws:
+                            if not is_immutable_type(arg.name, typemap):
+                                _add_alias(lhs, arg.name, alias_map, arg_aliases)
+                        continue
                     fdef = guard(find_callname, func_ir, expr, typemap)
                     # TODO: sometimes gufunc backend creates duplicate code
                     # causing find_callname to fail. Example: test_argmax
