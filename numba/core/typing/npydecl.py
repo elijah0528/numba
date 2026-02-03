@@ -287,6 +287,10 @@ bit_twiddling_functions = ["bitwise_and", "bitwise_or",
                            "left_shift", "right_shift",
                            "bitwise_not" ]
 
+# np.bitwise_count was added in NumPy 2.0
+if hasattr(np, 'bitwise_count'):
+    bit_twiddling_functions.append("bitwise_count")
+
 comparison_functions = [ "greater", "greater_equal", "less",
                          "less_equal", "not_equal", "equal",
                          "logical_and", "logical_or",
