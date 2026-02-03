@@ -266,6 +266,15 @@ def array_conjugate(a):
 def np_unique(a):
     return np.unique(a)
 
+def np_unique_sorted_kw(a, sorted):
+    return np.unique(a, sorted=sorted)
+
+def np_unique_sorted_false(a):
+    return np.unique(a, sorted=False)
+
+def np_unique_sorted_true(a):
+    return np.unique(a, sorted=True)
+
 
 def array_dot(a, b):
     return a.dot(b)
@@ -1854,6 +1863,25 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         np.datetime64("2001-01-01"),
                         np.datetime64("2001-01-02"),
                         np.datetime64("NAT")]))
+
+        if numpy_version >= (2, 0):
+            # sorted kw-only argument should be accepted and affect ordering.
+            cfunc_sorted_false = jit(nopython=True)(np_unique_sorted_false)
+            cfunc_sorted_true = jit(nopython=True)(np_unique_sorted_true)
+
+            def check_sorted_kw(a):
+                expected_false = np_unique_sorted_kw(a, sorted=False)
+                got_false = cfunc_sorted_false(a)
+                # Unsorted output order is unspecified; compare as sets.
+                np.testing.assert_equal(np.sort(expected_false), np.sort(got_false))
+
+                expected_true = np_unique_sorted_kw(a, sorted=True)
+                got_true = cfunc_sorted_true(a)
+                np.testing.assert_equal(expected_true, got_true)
+
+            check_sorted_kw(np.array([3, 1, 2, 2, 1, 3], dtype=np.int64))
+            check_sorted_kw(np.array([np.nan, 1.0, np.nan, 2.0], dtype=np.float64))
+            check_sorted_kw(np.array(['B', 'A', 'B', 'C'], dtype='<U16'))
 
     @needs_blas
     def test_array_dot(self):

@@ -2695,20 +2695,168 @@ def np_size(a):
 # ------------------------------------------------------------------------------
 
 
-@overload(np.unique)
-def np_unique(ar):
-    def np_unique_impl(ar):
-        def isnan(x):
-            # instead of np.isnan because it can't handle non-numeric type
-            return not (x == x)
-        b = np.sort(ar.ravel())
-        head = list(b[:1])
-        tail = [
-            x for i, x in enumerate(b[1:])
-            if b[i] != x and not (isnan(b[i]) and isnan(x))
-        ]
-        return np.array(head + tail)
-    return np_unique_impl
+if numpy_version >= (2, 0):
+    @overload(np.unique)
+    def np_unique(ar, return_index=False, return_inverse=False,
+                  return_counts=False, axis=None, *, equal_nan=True,
+                  sorted=True):
+        if not type_can_asarray(ar):
+            raise errors.TypingError(
+                "The argument to np.unique must be array-like"
+            )
+        # Unsupported kwargs: enforce at typing time so we don't need to raise
+        # custom exceptions from nopython code.
+        bad_kws_msg = ("np.unique: return_index/return_inverse/return_counts "
+                       "are not supported")
+        for kw in (return_index, return_inverse, return_counts):
+            if isinstance(kw, types.Omitted):
+                continue
+            if isinstance(kw, types.BooleanLiteral) and kw.literal_value is False:
+                continue
+            raise errors.TypingError(bad_kws_msg)
+
+        if not (isinstance(axis, (types.Omitted, types.NoneType)) or is_nonelike(axis)):
+            raise errors.TypingError("np.unique: axis is not supported")
+
+        if isinstance(equal_nan, types.Omitted):
+            pass
+        elif isinstance(equal_nan, types.BooleanLiteral) and equal_nan.literal_value is True:
+            pass
+        else:
+            raise errors.TypingError("np.unique: equal_nan must be True")
+
+        # sorted is a supported kw-only parameter for NumPy >= 2.0.
+        if not (isinstance(sorted, (types.Omitted, types.Boolean, types.BooleanLiteral))):
+            raise errors.TypingError("np.unique: sorted must be a boolean")
+
+        # Prefer a hash-based algorithm for hashable scalar dtypes, then sort
+        # the unique values if requested. This matches NumPy 2.4+ semantics
+        # where sorting is a post-processing step.
+        if isinstance(ar, types.Array) and isinstance(ar.dtype, types.Hashable):
+            def np_unique_impl(ar, return_index=False, return_inverse=False,
+                               return_counts=False, axis=None, *, equal_nan=True,
+                               sorted=True):
+                def isnan(x):
+                    # Instead of np.isnan because it can't handle non-numeric type
+                    return not (x == x)
+
+                a = np.asarray(ar).ravel()
+                seen = set()
+                out = []
+                seen_nan = False
+
+                for v in a:
+                    if isnan(v):
+                        if not seen_nan:
+                            seen_nan = True
+                            out.append(v)
+                    else:
+                        if v not in seen:
+                            seen.add(v)
+                            out.append(v)
+
+                if len(out) == 0:
+                    res = np.empty(0, dtype=a.dtype)
+                else:
+                    res = np.array(out)
+
+                if sorted:
+                    res.sort()
+                return res
+            return np_unique_impl
+
+        # Fallback to a sort-based implementation for non-hashable dtypes.
+        def np_unique_impl(ar, return_index=False, return_inverse=False,
+                           return_counts=False, axis=None, *, equal_nan=True,
+                           sorted=True):
+            def isnan(x):
+                # Instead of np.isnan because it can't handle non-numeric type
+                return not (x == x)
+
+            b = np.sort(np.asarray(ar).ravel())
+            head = list(b[:1])
+            tail = [
+                x for i, x in enumerate(b[1:])
+                if b[i] != x and not (isnan(b[i]) and isnan(x))
+            ]
+            res = np.array(head + tail)
+            # Note: if sorted=False, returning sorted output is still valid as
+            # the order is explicitly unspecified.
+            return res
+        return np_unique_impl
+else:
+    @overload(np.unique)
+    def np_unique(ar, return_index=False, return_inverse=False,
+                  return_counts=False, axis=None, *, equal_nan=True):
+        if not type_can_asarray(ar):
+            raise errors.TypingError(
+                "The argument to np.unique must be array-like"
+            )
+        bad_kws_msg = ("np.unique: return_index/return_inverse/return_counts "
+                       "are not supported")
+        for kw in (return_index, return_inverse, return_counts):
+            if isinstance(kw, types.Omitted):
+                continue
+            if isinstance(kw, types.BooleanLiteral) and kw.literal_value is False:
+                continue
+            raise errors.TypingError(bad_kws_msg)
+
+        if not (isinstance(axis, (types.Omitted, types.NoneType)) or is_nonelike(axis)):
+            raise errors.TypingError("np.unique: axis is not supported")
+
+        if isinstance(equal_nan, types.Omitted):
+            pass
+        elif isinstance(equal_nan, types.BooleanLiteral) and equal_nan.literal_value is True:
+            pass
+        else:
+            raise errors.TypingError("np.unique: equal_nan must be True")
+
+        # Prefer a hash-based algorithm for hashable scalar dtypes.
+        if isinstance(ar, types.Array) and isinstance(ar.dtype, types.Hashable):
+            def np_unique_impl(ar, return_index=False, return_inverse=False,
+                               return_counts=False, axis=None, *, equal_nan=True):
+                def isnan(x):
+                    # Instead of np.isnan because it can't handle non-numeric type
+                    return not (x == x)
+
+                a = np.asarray(ar).ravel()
+                seen = set()
+                out = []
+                seen_nan = False
+
+                for v in a:
+                    if isnan(v):
+                        if not seen_nan:
+                            seen_nan = True
+                            out.append(v)
+                    else:
+                        if v not in seen:
+                            seen.add(v)
+                            out.append(v)
+
+                if len(out) == 0:
+                    return np.empty(0, dtype=a.dtype)
+                else:
+                    res = np.array(out)
+                    res.sort()
+                    return res
+            return np_unique_impl
+
+        # Fallback to a sort-based implementation for non-hashable dtypes.
+        def np_unique_impl(ar, return_index=False, return_inverse=False,
+                           return_counts=False, axis=None, *, equal_nan=True):
+            def isnan(x):
+                # Instead of np.isnan because it can't handle non-numeric type
+                return not (x == x)
+
+            b = np.sort(np.asarray(ar).ravel())
+            head = list(b[:1])
+            tail = [
+                x for i, x in enumerate(b[1:])
+                if b[i] != x and not (isnan(b[i]) and isnan(x))
+            ]
+            return np.array(head + tail)
+        return np_unique_impl
 
 
 @overload(np.repeat)
