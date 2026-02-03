@@ -546,6 +546,43 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     def test_bitwise_not_ufunc(self):
         self.basic_int_ufunc_test(np.bitwise_not)
 
+    @unittest.skipUnless(hasattr(np, 'bitwise_count'),
+                         "np.bitwise_count requires NumPy 2.0+")
+    def test_bitwise_count_ufunc(self):
+        # bitwise_count always returns uint8, regardless of input type.
+        # Cannot use basic_int_ufunc_test since it assumes output type
+        # matches input type.
+        int_types = [np.int8, np.uint8, np.int16, np.uint16,
+                     np.int32, np.uint32, np.int64, np.uint64]
+
+        def pyfunc(x, out):
+            np.bitwise_count(x, out)
+
+        for dtype in int_types:
+            # Test values including edge cases for signed types
+            if np.issubdtype(dtype, np.signedinteger):
+                info = np.iinfo(dtype)
+                test_values = np.array(
+                    [0, 1, -1, 7, -7, info.min, info.max], dtype=dtype)
+            else:
+                info = np.iinfo(dtype)
+                test_values = np.array(
+                    [0, 1, 7, 15, info.max], dtype=dtype)
+
+            expected = np.zeros(test_values.shape, dtype=np.uint8)
+            result = np.zeros(test_values.shape, dtype=np.uint8)
+
+            np.bitwise_count(test_values, expected)
+
+            input_type = types.Array(from_dtype(dtype), 1, 'C')
+            output_type = types.Array(types.uint8, 1, 'C')
+            cfunc = self._compile(pyfunc, (input_type, output_type))
+            cfunc(test_values, result)
+
+            np.testing.assert_array_equal(
+                expected, result,
+                err_msg=f"bitwise_count failed for dtype {dtype}")
+
     # Note: there is no entry for left_shift and right_shift as this harness
     #       is not valid for them. This is so because left_shift and right
     #       shift implementation in NumPy has undefined behavior (in C-parlance)
