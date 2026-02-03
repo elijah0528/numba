@@ -2696,18 +2696,38 @@ def np_size(a):
 
 
 @overload(np.unique)
-def np_unique(ar):
-    def np_unique_impl(ar):
+def np_unique(ar, *, sorted=True):
+    if not isinstance(sorted, (types.Boolean, types.Omitted)):
+        raise errors.TypingError("sorted must be a boolean")
+
+    use_hash = (isinstance(ar, types.Array) and
+                isinstance(ar.dtype, types.Hashable))
+
+    def np_unique_impl(ar, *, sorted=True):
         def isnan(x):
             # instead of np.isnan because it can't handle non-numeric type
             return not (x == x)
-        b = np.sort(ar.ravel())
-        head = list(b[:1])
-        tail = [
-            x for i, x in enumerate(b[1:])
-            if b[i] != x and not (isnan(b[i]) and isnan(x))
-        ]
-        return np.array(head + tail)
+        aravel = ar.ravel()
+        if sorted or not use_hash:
+            b = np.sort(aravel)
+            head = list(b[:1])
+            tail = [
+                x for i, x in enumerate(b[1:])
+                if b[i] != x and not (isnan(b[i]) and isnan(x))
+            ]
+            return np.array(head + tail)
+        seen = set()
+        res = []
+        seen_nan = False
+        for x in aravel:
+            if isnan(x):
+                if not seen_nan:
+                    seen_nan = True
+                    res.append(x)
+            elif x not in seen:
+                seen.add(x)
+                res.append(x)
+        return np.array(res)
     return np_unique_impl
 
 

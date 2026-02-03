@@ -267,6 +267,10 @@ def np_unique(a):
     return np.unique(a)
 
 
+def np_unique_sorted(a, sorted=True):
+    return np.unique(a, sorted=sorted)
+
+
 def array_dot(a, b):
     return a.dot(b)
 
@@ -1849,6 +1853,30 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
         check(np.array([np.nan, np.nan]))
+        check(np.array(['A', 'A', 'B'], dtype='<U16'))  # issue 10250
+        check(np.array([np.datetime64("2001-01-01"),
+                        np.datetime64("2001-01-01"),
+                        np.datetime64("2001-01-02"),
+                        np.datetime64("NAT")]))
+
+    def test_unique_sorted(self):
+        pyfunc = np_unique_sorted
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a):
+            expected_sorted = np.unique(a)
+            for sorted_flag in (True, False):
+                got = cfunc(a, sorted=sorted_flag)
+                if sorted_flag:
+                    np.testing.assert_equal(expected_sorted, got)
+                else:
+                    np.testing.assert_equal(expected_sorted, np.sort(got))
+
+        check(np.array([[1, 1, 3], [3, 4, 5]]))
+        check(np.array(np.zeros(5)))
+        check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
+        check(np.array([]))
+        check(np.array([np.nan, np.nan, 1.0]))
         check(np.array(['A', 'A', 'B'], dtype='<U16'))  # issue 10250
         check(np.array([np.datetime64("2001-01-01"),
                         np.datetime64("2001-01-01"),
