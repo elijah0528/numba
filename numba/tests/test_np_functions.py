@@ -7074,6 +7074,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         c2 = nb_setdiff1d(aux2, aux1)
         self.assertPreciseEqual(c1, c2)
 
+    @unittest.skipIf(numpy_version < (2, 4), "np.unique(sorted=) requires NumPy 2.4+")
+    def test_unique_sorted_parameter(self):
+        @njit
+        def unique_kw(a, sorted=True):
+            return np.unique(a, sorted=sorted)
+
+        a = np.array([1, 2, 2, 3, 1, 4, 3] * 7, dtype=np.int64)
+
+        # Default behavior stays sorted.
+        self.assertPreciseEqual(unique_kw(a), np.unique(a))
+        self.assertPreciseEqual(unique_kw(a, True), np.unique(a, sorted=True))
+
+        # Unsorted output is allowed; verify content matches after sorting.
+        got = unique_kw(a, False)
+        expected = np.unique(a, sorted=False)
+        self.assertPreciseEqual(np.sort(got), np.sort(expected))
+
+        # NaN handling: multiple NaNs collapse to a single NaN.
+        b = np.array([1.0, np.nan, 2.0, np.nan, 1.0], dtype=np.float64)
+        got_b = unique_kw(b, False)
+        self.assertEqual(np.isnan(got_b).sum(), 1)
+        self.assertPreciseEqual(np.sort(got_b), np.unique(b))
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr

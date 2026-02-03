@@ -2696,18 +2696,51 @@ def np_size(a):
 
 
 @overload(np.unique)
-def np_unique(ar):
-    def np_unique_impl(ar):
+def np_unique(ar, sorted=True):
+    """
+    Numba implementation of ``np.unique``.
+
+    Notes
+    -----
+    NumPy 2.4 introduced a ``sorted=`` parameter. For compatibility with older
+    NumPy versions, Numba only accepts the argument when running against
+    NumPy 2.4+.
+    """
+    if numpy_version < (2, 4):
+        # Match NumPy behavior: passing "sorted=" on older NumPy is invalid.
+        if not isinstance(sorted, types.Omitted):
+            raise errors.TypingError("np.unique(sorted=...) requires NumPy 2.4+")
+
+    def np_unique_impl(ar, sorted=True):
         def isnan(x):
             # instead of np.isnan because it can't handle non-numeric type
             return not (x == x)
-        b = np.sort(ar.ravel())
-        head = list(b[:1])
-        tail = [
-            x for i, x in enumerate(b[1:])
-            if b[i] != x and not (isnan(b[i]) and isnan(x))
-        ]
-        return np.array(head + tail)
+
+        a = np.asarray(ar).ravel()
+        if a.size == 0:
+            return np.empty(0, dtype=a.dtype)
+
+        # Hash-based scan; optionally sort results afterwards.
+        seen = set()
+        out_list = []
+        nan_seen = False
+
+        for x in a:
+            if isnan(x):
+                if not nan_seen:
+                    out_list.append(x)
+                    nan_seen = True
+            else:
+                if x not in seen:
+                    seen.add(x)
+                    out_list.append(x)
+
+        out = np.array(out_list)
+        if sorted:
+            return np.sort(out)
+        else:
+            return out
+
     return np_unique_impl
 
 
