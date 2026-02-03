@@ -543,5 +543,159 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             )
 
 
+class TestBooleanMaskValidation(MemoryLeakMixin, TestCase):
+    """Test that boolean mask shape is validated against array dimension.
+    
+    This tests the fix for issue #10374 where Numba did not validate
+    that boolean masks have the correct size for the indexed dimension.
+    """
+
+    def test_boolean_mask_size_mismatch_1d_getitem(self):
+        """Test getitem with mismatched boolean mask raises IndexError."""
+        @njit
+        def foo(x):
+            return x[np.array([True, True, False])]
+        
+        x = np.arange(2)
+        # NumPy behavior
+        with self.assertRaises(IndexError):
+            foo.py_func(x)
+        # Numba behavior should match
+        with self.assertRaises(IndexError):
+            foo(x)
+
+    def test_boolean_mask_size_mismatch_1d_setitem(self):
+        """Test setitem with mismatched boolean mask raises IndexError."""
+        @njit
+        def foo(x):
+            x[np.array([True, True, False])] = 42
+        
+        x = np.arange(2)
+        # NumPy behavior
+        with self.assertRaises(IndexError):
+            foo.py_func(x.copy())
+        # Numba behavior should match
+        with self.assertRaises(IndexError):
+            foo(x.copy())
+
+    def test_boolean_mask_correct_size_works(self):
+        """Test that correctly sized boolean masks work."""
+        @njit
+        def foo(x):
+            return x[np.array([True, False])]
+        
+        x = np.arange(2)
+        expected = foo.py_func(x)
+        got = foo(x)
+        np.testing.assert_array_equal(expected, got)
+
+    def test_boolean_mask_size_mismatch_multidim(self):
+        """Test boolean mask on one axis of multi-dimensional array."""
+        @njit
+        def foo(x):
+            # Array shape is (3, 4), boolean mask has 5 elements on axis 0
+            return x[np.array([True, True, False, True, False]), 0]
+        
+        x = np.arange(12).reshape(3, 4)
+        # NumPy behavior
+        with self.assertRaises(IndexError):
+            foo.py_func(x)
+        # Numba behavior should match
+        with self.assertRaises(IndexError):
+            foo(x)
+
+    def test_boolean_mask_larger_than_array(self):
+        """Test mask larger than array raises IndexError."""
+        @njit
+        def foo(x):
+            return x[np.array([True, True, True, True, True])]
+        
+        x = np.arange(3)
+        # NumPy behavior
+        with self.assertRaises(IndexError):
+            foo.py_func(x)
+        # Numba behavior should match
+        with self.assertRaises(IndexError):
+            foo(x)
+
+    def test_boolean_mask_smaller_than_array(self):
+        """Test mask smaller than array raises IndexError."""
+        @njit
+        def foo(x):
+            return x[np.array([True])]
+        
+        x = np.arange(3)
+        # NumPy behavior
+        with self.assertRaises(IndexError):
+            foo.py_func(x)
+        # Numba behavior should match
+        with self.assertRaises(IndexError):
+            foo(x)
+
+    @unittest.skip("Empty arrays with boolean masks have type inference issues")
+    def test_boolean_mask_empty_array(self):
+        """Test boolean mask on empty array dimension."""
+        # Note: This test is skipped because Numba has pre-existing
+        # type inference issues with empty arrays and empty boolean masks.
+        # This is unrelated to the shape validation fix.
+        @njit
+        def foo(x):
+            return x[np.array([], dtype=np.bool_)]
+        
+        x = np.array([])
+        expected = foo.py_func(x)
+        got = foo(x)
+        np.testing.assert_array_equal(expected, got)
+
+    def test_boolean_mask_all_false(self):
+        """Test boolean mask with all False values."""
+        @njit
+        def foo(x):
+            return x[np.array([False, False, False])]
+        
+        x = np.arange(3)
+        expected = foo.py_func(x)
+        got = foo(x)
+        np.testing.assert_array_equal(expected, got)
+
+    def test_boolean_mask_all_true(self):
+        """Test boolean mask with all True values."""
+        @njit
+        def foo(x):
+            return x[np.array([True, True, True])]
+        
+        x = np.arange(3)
+        expected = foo.py_func(x)
+        got = foo(x)
+        np.testing.assert_array_equal(expected, got)
+
+    def test_boolean_mask_with_slices(self):
+        """Test boolean mask combined with slices."""
+        @njit
+        def foo(x):
+            # Array shape is (4, 5), boolean mask on axis 1
+            return x[1:3, np.array([True, False, True, False, True])]
+        
+        x = np.arange(20).reshape(4, 5)
+        expected = foo.py_func(x)
+        got = foo(x)
+        np.testing.assert_array_equal(expected, got)
+
+    def test_boolean_mask_mismatch_with_slices(self):
+        """Test boolean mask mismatch when combined with slices."""
+        @njit
+        def foo(x):
+            # Array shape is (4, 5), boolean mask has 3 elements (wrong)
+            return x[1:3, np.array([True, False, True])]
+        
+        x = np.arange(20).reshape(4, 5)
+        # NumPy behavior
+        with self.assertRaises(IndexError):
+            foo.py_func(x)
+        # Numba behavior should match
+        with self.assertRaises(IndexError):
+            foo(x)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -860,11 +860,12 @@ class BooleanArrayIndexer(Indexer):
     Compute indices from an array of boolean predicates.
     """
 
-    def __init__(self, context, builder, idxty, idxary):
+    def __init__(self, context, builder, idxty, idxary, dim_size):
         self.context = context
         self.builder = builder
         self.idxty = idxty
         self.idxary = idxary
+        self.dim_size = dim_size  # Size of the array dimension being indexed
         assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant(self.ll_intp, 0)
@@ -872,6 +873,13 @@ class BooleanArrayIndexer(Indexer):
     def prepare(self):
         builder = self.builder
         self.size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
+
+        # Validate boolean mask size matches indexed dimension size
+        size_mismatch = builder.icmp_signed('!=', self.size, self.dim_size)
+        with builder.if_then(size_mismatch, likely=False):
+            msg = "boolean index did not match indexed array along dimension 0"
+            self.context.call_conv.return_user_exc(builder, IndexError, (msg,))
+
         self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
         self.count = cgutils.alloca_once(builder, self.ll_intp)
         self.bb_start = builder.append_basic_block()
@@ -1054,7 +1062,8 @@ class FancyIndexer(object):
                                                   self.shapes[ax])
                 elif isinstance(idxty.dtype, types.Boolean):
                     indexer = BooleanArrayIndexer(context, builder,
-                                                  idxty, idxary)
+                                                  idxty, idxary,
+                                                  self.shapes[ax])
                 else:
                     assert 0
                 indexers.append(indexer)
