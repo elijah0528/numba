@@ -480,6 +480,35 @@ def int_invert_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def int_popcount_impl(context, builder, sig, args):
+    """
+    Counts the number of 1-bits in the absolute value of an integer.
+    Used by np.bitwise_count.
+    """
+    [val] = args
+    [typ] = sig.args
+
+    # For signed integers, compute absolute value first.
+    # NumPy's bitwise_count counts bits in abs(x), not the bit pattern.
+    if typ.signed:
+        ZERO = Constant(val.type, 0)
+        is_neg = builder.icmp_signed('<', val, ZERO)
+        negated = builder.neg(val)
+        val = builder.select(is_neg, negated, val)
+
+    # Count the 1-bits using LLVM's ctpop intrinsic
+    popcount = builder.ctpop(val)
+
+    # Result is always uint8, so truncate if the input was larger
+    uint8_type = ir.IntType(8)
+    if popcount.type.width > 8:
+        res = builder.trunc(popcount, uint8_type)
+    else:
+        res = popcount  # Already uint8 (from uint8/int8 input)
+
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 def int_sign_impl(context, builder, sig, args):
     """
     np.sign(int)
