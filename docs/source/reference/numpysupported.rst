@@ -954,19 +954,22 @@ Trigonometric functions
 Bit-twiddling functions
 -----------------------
 
-==============  =============  ===============
-    UFUNC                  MODE
---------------  ------------------------------
-    name         object mode    nopython mode
-==============  =============  ===============
- bitwise_and         Yes          Yes
- bitwise_or          Yes          Yes
- bitwise_xor         Yes          Yes
- bitwise_not         Yes          Yes
- invert              Yes          Yes
- left_shift          Yes          Yes
- right_shift         Yes          Yes
-==============  =============  ===============
+===============  =============  ===============
+    UFUNC                   MODE
+---------------  ------------------------------
+    name          object mode    nopython mode
+===============  =============  ===============
+ bitwise_and          Yes          Yes
+ bitwise_count        Yes          Yes [1]_
+ bitwise_or           Yes          Yes
+ bitwise_xor          Yes          Yes
+ bitwise_not          Yes          Yes
+ invert               Yes          Yes
+ left_shift           Yes          Yes
+ right_shift          Yes          Yes
+===============  =============  ===============
+
+.. [1] ``np.bitwise_count`` requires NumPy >= 2.0
 
 
 Comparison functions
