@@ -37,6 +37,7 @@ ufuncs and C callbacks.
 For more information about Numba, see the Numba homepage:
 https://numba.pydata.org and the online documentation:
 https://numba.readthedocs.io/en/stable/index.html
+Note: This README includes a small update for artifact export.
 
 Installation
 ============
